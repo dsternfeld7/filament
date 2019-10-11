@@ -65,7 +65,7 @@ fragment {
         // Apply the video stream to the +Z face on the cube.
         if (variable_uv.z >= 1.0) {
             vec2 uv = (materialParams.textureTransform * vec4(variable_uv.xy, 0, 1)).xy;
-            material.baseColor.rgb = texture(materialParams_videoTexture, uv).rgb;
+            material.baseColor.rgb = inverseTonemapSRGB(texture(materialParams_videoTexture, uv).rgb);
         } else {
             material.baseColor.rgb = materialParams.baseColor;
         }

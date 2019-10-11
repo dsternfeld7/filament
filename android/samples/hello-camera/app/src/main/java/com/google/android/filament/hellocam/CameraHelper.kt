@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,38 +52,59 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
     private var resolution = Size(640, 480)
     private var surfaceTexture: SurfaceTexture? = null
 
-    private val stateCallback = object : CameraDevice.StateCallback() {
-
+    private val cameraCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(cameraDevice: CameraDevice) {
             cameraOpenCloseLock.release()
             this@CameraHelper.cameraDevice = cameraDevice
-             createCaptureSession()
+            createCaptureSession()
         }
-
         override fun onDisconnected(cameraDevice: CameraDevice) {
             cameraOpenCloseLock.release()
             cameraDevice.close()
             this@CameraHelper.cameraDevice = null
         }
-
         override fun onError(cameraDevice: CameraDevice, error: Int) {
             onDisconnected(cameraDevice)
             this@CameraHelper.activity.finish()
         }
     }
 
+    /**
+     * Finds the front-facing Android camera, requests permission, and sets up a listener that will
+     * start a capture session as soon as the camera is ready.
+     */
     fun openCamera() {
+        val manager = activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            for (cameraId in manager.cameraIdList) {
+                val characteristics = manager.getCameraCharacteristics(cameraId)
+                val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
+                if (cameraDirection != null && cameraDirection == CameraCharacteristics.LENS_FACING_FRONT) {
+                    continue
+                }
+
+                this.cameraId = cameraId
+                Log.i(kLogTag, "Selected camera $cameraId.")
+
+                val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: continue
+                resolution = map.getOutputSizes(SurfaceTexture::class.java)[0]
+                Log.i(kLogTag, "Highest resolution is $resolution.")
+            }
+        } catch (e: CameraAccessException) {
+            Log.e(kLogTag, e.toString())
+        } catch (e: NullPointerException) {
+            Log.e(kLogTag, "Camera2 API is not supported on this device.")
+        }
+
         val permission = ContextCompat.checkSelfPermission(this.activity, Manifest.permission.CAMERA)
-        setUpCameraOutputs()
         if (permission != PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), kRequestCameraPermission)
             return
         }
-        val manager = this.activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
             throw RuntimeException("Time out waiting to lock camera opening.")
         }
-        manager.openCamera(cameraId, stateCallback, backgroundHandler)
+        manager.openCamera(cameraId, cameraCallback, backgroundHandler)
     }
 
     fun onResume() {
@@ -110,33 +131,6 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
             return true
         }
         return false
-    }
-
-    private fun setUpCameraOutputs() {
-        val manager = activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        try {
-            for (cameraId in manager.cameraIdList) {
-                val characteristics = manager.getCameraCharacteristics(cameraId)
-                val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
-                if (cameraDirection != null && cameraDirection == CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue
-                }
-
-                this.cameraId = cameraId
-                Log.i(kLogTag, "Selected camera $cameraId.")
-
-                val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: continue
-                resolution = map.getOutputSizes(SurfaceTexture::class.java)[0]
-                Log.i(kLogTag, "Highest resolution is $resolution.")
-
-                return
-            }
-        } catch (e: CameraAccessException) {
-            Log.e(kLogTag, e.toString())
-        } catch (e: NullPointerException) {
-            Log.e(kLogTag, "Camera2 API is not supported on this device.")
-        }
-
     }
 
     private fun createCaptureSession() {
