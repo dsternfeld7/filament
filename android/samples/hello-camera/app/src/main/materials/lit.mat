@@ -40,6 +40,10 @@ material {
             name : roughness
         },
         {
+            type : float,
+            name : uvOffset
+        },
+        {
             type : samplerExternal,
             name : videoTexture
         },
@@ -65,7 +69,18 @@ fragment {
         // Apply the video stream to the +Z face on the cube.
         if (variable_uv.z >= 1.0) {
             vec2 uv = (materialParams.textureTransform * vec4(variable_uv.xy, 0, 1)).xy;
+
+            // If in right-hand side (in portrait mode), apply an offset.
+            if (uv.y < 0.5) {
+                uv.x += materialParams.uvOffset;
+            }
+
             material.baseColor.rgb = inverseTonemapSRGB(texture(materialParams_videoTexture, uv).rgb);
+
+            if (uv.y < 0.5) {
+                material.baseColor.rgb *= 0.3;
+            }
+
         } else {
             material.baseColor.rgb = materialParams.baseColor;
         }

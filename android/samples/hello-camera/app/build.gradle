@@ -38,7 +38,11 @@ android {
     compileSdkVersion 29
     defaultConfig {
         applicationId "com.google.android.filament.hellocam"
-        minSdkVersion 23 // 21 is required for CameraDevice.StateCallback, 23 is required for shouldShowRequestPermissionRationale
+        // 21 is required for CameraDevice.StateCallback
+        // 23 is required for shouldShowRequestPermissionRationale
+        // 26 is required for HardwareBuffer
+        // 28 is required for image.getHardwareBuffer
+        minSdkVersion 28
         targetSdkVersion 29
         versionCode 1
         versionName "1.0"

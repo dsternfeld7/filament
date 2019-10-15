@@ -18,12 +18,9 @@ package com.google.android.filament.hellocam
 
 import android.animation.ValueAnimator
 import android.app.Activity
-import android.opengl.Matrix
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
-import android.util.Log
 import android.view.Choreographer
-import android.view.Display
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.animation.LinearInterpolator
@@ -36,8 +33,6 @@ import com.google.android.filament.android.UiHelper
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.Channels
-
-import kotlin.math.*
 
 class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallback {
     companion object {
@@ -288,19 +283,12 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     }
 
     private fun startAnimation() {
-        // Animate the triangle
         animator.interpolator = LinearInterpolator()
         animator.duration = 6000
         animator.repeatMode = ValueAnimator.RESTART
         animator.repeatCount = ValueAnimator.INFINITE
         animator.addUpdateListener(object : ValueAnimator.AnimatorUpdateListener {
-            val transformMatrix = FloatArray(16)
             override fun onAnimationUpdate(animator: ValueAnimator) {
-                val t = animator.animatedValue as Float
-                val radians = sin(t) * 3.0f * PI.toFloat()
-                Matrix.setRotateM(transformMatrix, 0, radians, 0.0f, 1.0f, 0.0f)
-                val tcm = engine.transformManager
-                tcm.setTransform(tcm.getInstance(renderable), transformMatrix)
             }
         })
         animator.start()
@@ -363,6 +351,10 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
                 // If beginFrame() returns false you should skip the frame
                 // This means you are sending frames too quickly to the GPU
                 if (renderer.beginFrame(swapChain!!)) {
+
+                    cameraHelper.repaintCanvas()
+                    materialInstance.setParameter("uvOffset", cameraHelper.uvOffset)
+
                     renderer.render(view)
                     renderer.endFrame()
                 }

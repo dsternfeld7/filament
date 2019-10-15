@@ -19,8 +19,9 @@ package com.google.android.filament.hellocam
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.SurfaceTexture
+import android.graphics.LinearGradient
 import android.hardware.camera2.*
+import android.hardware.HardwareBuffer
 import android.os.Handler
 import android.os.HandlerThread
 import android.support.v4.content.ContextCompat
@@ -29,6 +30,8 @@ import android.util.Size
 import android.view.Surface
 
 import android.Manifest
+import android.graphics.*
+import android.media.ImageReader
 import android.opengl.Matrix
 import android.view.Display
 
@@ -36,6 +39,8 @@ import com.google.android.filament.*
 
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+
+
 
 /**
  * Toy class that handles all interaction with the Android camera2 API.
@@ -51,6 +56,37 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
     private var captureSession: CameraCaptureSession? = null
     private var resolution = Size(640, 480)
     private var surfaceTexture: SurfaceTexture? = null
+    private val streamSource = StreamSource.CPU_TEST_EXTERNAL_IMAGE
+    //private val streamSource = StreamSource.CPU_TEST_STREAM_SURFACE
+    //private val streamSource = StreamSource.CPU_TEST_STREAM_TEXID
+    private var imageReader: ImageReader? = null
+    private var frameNumber = 0L
+    var uvOffset = 0.0f
+        private set
+
+    private var canvasSurface: Surface? = null
+
+    private val kGradientSpeed = 20
+    private val kGradientCount = 5
+    private val kGradientColors = intArrayOf(
+            Color.RED, Color.RED,
+            Color.WHITE, Color.WHITE,
+            Color.GREEN, Color.GREEN,
+            Color.WHITE, Color.WHITE,
+            Color.BLUE, Color.BLUE)
+    private val kGradientStops = floatArrayOf(
+            0.0f, 0.1f,
+            0.1f, 0.5f,
+            0.5f, 0.6f,
+            0.6f, 0.9f,
+            0.9f, 1.0f)
+
+    enum class StreamSource {
+        CAMERA_FEED_STREAM_SURFACE,
+        CPU_TEST_STREAM_SURFACE,
+        CPU_TEST_STREAM_TEXID,
+        CPU_TEST_EXTERNAL_IMAGE,
+    }
 
     private val cameraCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(cameraDevice: CameraDevice) {
@@ -107,6 +143,28 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
         manager.openCamera(cameraId, cameraCallback, backgroundHandler)
     }
 
+    fun repaintCanvas() {
+        val kGradientScale = resolution.width.toFloat() / kGradientCount
+        val kGradientOffset = (frameNumber.toFloat() * kGradientSpeed) % resolution.width
+        val surface = canvasSurface
+        if (surface != null) {
+            val canvas = surface.lockCanvas(null)
+
+            val movingPaint = Paint()
+            movingPaint.shader = LinearGradient(kGradientOffset, 0.0f, kGradientOffset + kGradientScale, 0.0f, kGradientColors, kGradientStops, Shader.TileMode.REPEAT)
+            canvas.drawRect(Rect(0, resolution.height / 2, resolution.width, resolution.height), movingPaint)
+
+            val staticPaint = Paint()
+            staticPaint.shader = LinearGradient(0.0f, 0.0f, kGradientScale, 0.0f, kGradientColors, kGradientStops, Shader.TileMode.REPEAT)
+            canvas.drawRect(Rect(0, 0, resolution.width, resolution.height / 2), staticPaint)
+
+            surface.unlockCanvasAndPost(canvas)
+        }
+
+        frameNumber++
+        uvOffset = 1.0f - kGradientOffset / resolution.width.toFloat()
+    }
+
     fun onResume() {
         backgroundThread = HandlerThread("CameraBackground").also { it.start() }
         backgroundHandler = Handler(backgroundThread?.looper!!)
@@ -134,18 +192,6 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
     }
 
     private fun createCaptureSession() {
-        surfaceTexture?.release()
-
-        // Create the Android surface that will hold the camera image.
-        surfaceTexture = SurfaceTexture(0)
-        surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
-        surfaceTexture!!.detachFromGLContext()
-        val surface = Surface(surfaceTexture)
-
-        // Create the Filament Stream object that gets bound to the Texture.
-        val filamentStream = Stream.Builder()
-                .stream(surfaceTexture!!)
-                .build(filamentEngine)
 
         // Create the Filament Texture and Sampler objects.
         val filamentTexture = Texture.Builder()
@@ -153,7 +199,7 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
                 .format(Texture.InternalFormat.RGB8)
                 .build(filamentEngine)
 
-        val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
+        val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.REPEAT)
 
         // We are texturing a front-facing square shape so we need to generate a matrix that transforms (u, v, 0, 1)
         // into a new UV coordinate according to the screen rotation and the aspect ratio of the camera image.
@@ -180,28 +226,100 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
         }
 
         // Connect the Stream to the Texture and the Texture to the MaterialInstance.
-        filamentTexture.setExternalStream(filamentEngine, filamentStream)
         filamentMaterial.setParameter("videoTexture", filamentTexture, sampler)
         filamentMaterial.setParameter("textureTransform", MaterialInstance.FloatElement.MAT4, textureTransform, 0, 1)
 
-        // Start the capture session. You could also use TEMPLATE_PREVIEW here.
-        val captureRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
-        captureRequestBuilder.addTarget(surface)
+        // Start the capture session.
+        if (streamSource == StreamSource.CAMERA_FEED_STREAM_SURFACE) {
 
-        cameraDevice?.createCaptureSession(listOf(surface),
-                object : CameraCaptureSession.StateCallback() {
-                    override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
-                        if (cameraDevice == null) return
-                        captureSession = cameraCaptureSession
-                        captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
-                        captureRequest = captureRequestBuilder.build()
-                        captureSession!!.setRepeatingRequest(captureRequest, null, backgroundHandler)
-                        Log.i(kLogTag, "Created CaptureRequest.")
-                    }
-                    override fun onConfigureFailed(session: CameraCaptureSession) {
-                        Log.e(kLogTag, "onConfigureFailed")
-                    }
-                }, null)
+            // [Re]create the Android surface that will hold the camera image.
+            surfaceTexture?.release()
+            surfaceTexture = SurfaceTexture(0)
+            surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
+            surfaceTexture!!.detachFromGLContext()
+            val surface = Surface(surfaceTexture)
+
+            // Create the Filament Stream object that gets bound to the Texture.
+            val filamentStream = Stream.Builder()
+                    .stream(surfaceTexture!!)
+                    .build(filamentEngine)
+
+            filamentTexture.setExternalStream(filamentEngine, filamentStream)
+
+            val captureRequestBuilder = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+            captureRequestBuilder.addTarget(surface)
+
+            cameraDevice?.createCaptureSession(listOf(surface),
+                    object : CameraCaptureSession.StateCallback() {
+                        override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
+                            if (cameraDevice == null) return
+                            captureSession = cameraCaptureSession
+                            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                            captureRequest = captureRequestBuilder.build()
+                            captureSession!!.setRepeatingRequest(captureRequest, null, backgroundHandler)
+                            Log.i(kLogTag, "Created CaptureRequest.")
+                        }
+
+                        override fun onConfigureFailed(session: CameraCaptureSession) {
+                            Log.e(kLogTag, "onConfigureFailed")
+                        }
+                    }, null)
+        }
+
+        if (streamSource == StreamSource.CPU_TEST_STREAM_SURFACE) {
+
+            // [Re]create the Android surface that will hold the canvas image.
+            surfaceTexture?.release()
+            surfaceTexture = SurfaceTexture(0)
+            surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
+            surfaceTexture!!.detachFromGLContext()
+            canvasSurface = Surface(surfaceTexture)
+
+            // Create the Filament Stream object that gets bound to the Texture.
+            val filamentStream = Stream.Builder()
+                    .stream(surfaceTexture!!)
+                    .build(filamentEngine)
+
+            filamentTexture.setExternalStream(filamentEngine, filamentStream)
+
+            frameNumber = 0
+            repaintCanvas()
+        }
+
+        if (streamSource == StreamSource.CPU_TEST_STREAM_TEXID) {
+
+            // TODO: This does not work, we need an active GL context.
+            val kTextureId = 42
+
+            // [Re]create the Android surface that will hold the canvas image.
+            surfaceTexture?.release()
+            surfaceTexture = SurfaceTexture(kTextureId)
+            surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
+            surfaceTexture!!.detachFromGLContext()
+            canvasSurface = Surface(surfaceTexture)
+
+            // Create the Filament Stream object that gets bound to the Texture.
+            val filamentStream = Stream.Builder()
+                    .stream(kTextureId.toLong())
+                    .width(resolution.width)
+                    .height(resolution.height)
+                    .build(filamentEngine)
+
+            filamentTexture.setExternalStream(filamentEngine, filamentStream)
+
+            frameNumber = 0
+            repaintCanvas()
+        }
+
+        if (streamSource == StreamSource.CPU_TEST_EXTERNAL_IMAGE) {
+            val imageReader = ImageReader.newInstance(resolution.width, resolution.height, 3, ImageFormat.PRIVATE) // , HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
+            this.imageReader = imageReader
+            val surface = imageReader.surface
+            val image = imageReader.acquireLatestImage()
+
+            //val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
+            filamentTexture.setExternalImage(filamentEngine, eglImageOES)
+        }
     }
 
     companion object {
