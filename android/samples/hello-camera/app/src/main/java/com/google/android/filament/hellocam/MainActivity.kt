@@ -24,6 +24,7 @@ import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.animation.LinearInterpolator
+import android.opengl.EGLContext
 
 import com.google.android.filament.*
 import com.google.android.filament.RenderableManager.*
@@ -38,6 +39,7 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     companion object {
         init {
             Filament.init()
+            NativeHelper.init()
         }
     }
 
@@ -98,7 +100,9 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     }
 
     private fun setupFilament() {
-        engine = Engine.create()
+        val eglContext: EGLContext = NativeHelper.createEGLContext()
+        engine = Engine.create(eglContext)
+
         renderer = engine.createRenderer()
         scene = engine.createScene()
         view = engine.createView()

@@ -93,6 +93,11 @@ android {
     aaptOptions {
         noCompress 'filamat'
     }
+    externalNativeBuild {
+        cmake {
+            path file('CMakeLists.txt')
+        }
+    }
 }
 
 dependencies {

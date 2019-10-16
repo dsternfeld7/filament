@@ -56,8 +56,8 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
     private var captureSession: CameraCaptureSession? = null
     private var resolution = Size(640, 480)
     private var surfaceTexture: SurfaceTexture? = null
-    private val streamSource = StreamSource.CPU_TEST_EXTERNAL_IMAGE
-    //private val streamSource = StreamSource.CPU_TEST_STREAM_SURFACE
+    private val streamSource = StreamSource.CPU_TEST_STREAM_SURFACE
+//    private val streamSource = StreamSource.CPU_TEST_EXTERNAL_IMAGE
     //private val streamSource = StreamSource.CPU_TEST_STREAM_TEXID
     private var imageReader: ImageReader? = null
     private var frameNumber = 0L
@@ -312,19 +312,22 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
         }
 
         if (streamSource == StreamSource.CPU_TEST_EXTERNAL_IMAGE) {
-            val imageReader = ImageReader.newInstance(resolution.width, resolution.height, 3, ImageFormat.PRIVATE) // , HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
+            val imageReader = ImageReader.newInstance(resolution.width, resolution.height, kImageReaderMaxImages, ImageFormat.PRIVATE) // , HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
             this.imageReader = imageReader
-            val surface = imageReader.surface
-            val image = imageReader.acquireLatestImage()
 
-            //val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
-            filamentTexture.setExternalImage(filamentEngine, eglImageOES)
+            // The eglImageOES is passed down as a void* all the way to OpenGLDriver::setExternalImage where it is cast to GLeglImageOES as per GL_OES_EGL_image.
+            // val surface = imageReader.surface
+            // val image = imageReader.acquireLatestImage()
+            // val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
+            // TODO: On every frame (i.e. in repaintCanvas), do: imageReader.acquireLatestImage => HardwareBuffer => GLeglImageOES
+            // filamentTexture.setExternalImage(filamentEngine, null) // eglImageOES)
         }
     }
 
     companion object {
         private const val kLogTag = "CameraHelper"
         private const val kRequestCameraPermission = 1
+        private const val kImageReaderMaxImages = 3
     }
 
 }
