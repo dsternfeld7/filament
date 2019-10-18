@@ -47,13 +47,14 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     private lateinit var uiHelper: UiHelper
     private lateinit var choreographer: Choreographer
 
+    private lateinit var eglContext: EGLContext
     private lateinit var engine: Engine
     private lateinit var renderer: Renderer
     private lateinit var scene: Scene
     private lateinit var view: View
 
     // This helper wraps the Android camera2 API and connects it to a Filament material.
-    private lateinit var cameraHelper: CameraHelper
+    private var cameraHelper: CameraHelper? = null
 
     // This is the Filament camera, not the phone camera. :)
     private lateinit var camera: Camera
@@ -74,6 +75,8 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     // Performs the rendering and schedules new frames
     private val frameScheduler = FrameCallback()
 
+    private var externalTextureID: Int = 0
+
     private val animator = ValueAnimator.ofFloat(0.0f, 50.0f)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,9 +91,6 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
         setupFilament()
         setupView()
         setupScene()
-
-        cameraHelper = CameraHelper(this, engine, materialInstance, windowManager.defaultDisplay)
-        cameraHelper.openCamera()
     }
 
     private fun setupSurfaceView() {
@@ -100,7 +100,7 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     }
 
     private fun setupFilament() {
-        val eglContext: EGLContext = NativeHelper.createEGLContext()
+        eglContext = NativeHelper.createEGLContext()
         engine = Engine.create(eglContext)
 
         renderer = engine.createRenderer()
@@ -302,14 +302,14 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
         super.onResume()
         choreographer.postFrameCallback(frameScheduler)
         animator.start()
-        cameraHelper.onResume()
+        cameraHelper?.onResume()
     }
 
     override fun onPause() {
         super.onPause()
         choreographer.removeFrameCallback(frameScheduler)
         animator.cancel()
-        cameraHelper.onPause()
+        cameraHelper?.onPause()
     }
 
     override fun onDestroy() {
@@ -352,12 +352,20 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
 
             // This check guarantees that we have a swap chain
             if (uiHelper.isReadyToRender) {
+
                 // If beginFrame() returns false you should skip the frame
                 // This means you are sending frames too quickly to the GPU
                 if (renderer.beginFrame(swapChain!!)) {
 
-                    cameraHelper.repaintCanvas()
-                    materialInstance.setParameter("uvOffset", cameraHelper.uvOffset)
+                    if (cameraHelper == null) {
+                        externalTextureID = NativeHelper.createCameraTexture(eglContext)
+                        cameraHelper = CameraHelper(this@MainActivity, engine, materialInstance, windowManager.defaultDisplay, externalTextureID).apply {
+                            openCamera()
+                        }
+                    }
+
+                    cameraHelper!!.repaintCanvas()
+                    materialInstance.setParameter("uvOffset", cameraHelper!!.uvOffset)
 
                     renderer.render(view)
                     renderer.endFrame()
@@ -405,7 +413,7 @@ class MainActivity : Activity(), ActivityCompat.OnRequestPermissionsResultCallba
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        if (!cameraHelper.onRequestPermissionsResult(requestCode, grantResults)) {
+        if (!cameraHelper!!.onRequestPermissionsResult(requestCode, grantResults)) {
             this.onRequestPermissionsResult(requestCode, permissions, grantResults)
         }
     }

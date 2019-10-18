@@ -137,7 +137,6 @@ OpenGLContext::OpenGLContext() noexcept {
 #ifdef GL_FRAGMENT_SHADER_DERIVATIVE_HINT
     glHint(GL_FRAGMENT_SHADER_DERIVATIVE_HINT, GL_NICEST);
 #endif
-
 }
 
 UTILS_NOINLINE

@@ -1000,6 +1000,7 @@ void OpenGLDriver::createStreamFromTextureIdR(Handle<HwStream> sh,
     for (auto& info : s->user_thread.infos) {
         info.ets = mPlatform.createExternalTextureStorage();
     }
+    CHECK_GL_ERROR(utils::slog.e)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1711,6 +1712,8 @@ void OpenGLDriver::setExternalImage(Handle<HwTexture> th, void* image) {
         assert(t->gl.target == GL_TEXTURE_EXTERNAL_OES);
 
         bindTexture(OpenGLContext::MAX_TEXTURE_UNIT_COUNT - 1, t);
+        CHECK_GL_ERROR(utils::slog.e)
+
         gl.activeTexture(OpenGLContext::MAX_TEXTURE_UNIT_COUNT - 1);
 
 #ifdef GL_OES_EGL_image
@@ -2192,6 +2195,8 @@ void OpenGLDriver::updateStream(GLTexture* t, DriverApi* driver) noexcept {
             }
         });
     }
+
+    CHECK_GL_ERROR(utils::slog.e)
 }
 
 void OpenGLDriver::readStreamPixels(Handle<HwStream> sh,

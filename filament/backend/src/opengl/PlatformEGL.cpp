@@ -200,6 +200,7 @@ Driver* PlatformEGL::createDriver(void* sharedContext) noexcept {
 
     EGLint contextAttribs[] = {
             EGL_CONTEXT_CLIENT_VERSION, 3,
+            // EGL_CONTEXT_FLAGS_KHR, EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR,
             EGL_NONE, EGL_NONE, // reserved for EGL_CONTEXT_OPENGL_NO_ERROR_KHR below
             EGL_NONE
     };
@@ -209,15 +210,6 @@ Driver* PlatformEGL::createDriver(void* sharedContext) noexcept {
             EGL_HEIGHT, 1,
             EGL_NONE
     };
-
-#ifdef NDEBUG
-    // When we don't have a shared context and we're in release mode, we always activate the
-    // EGL_KHR_create_context_no_error extension.
-    if (!sharedContext && extensions.has("EGL_KHR_create_context_no_error")) {
-        contextAttribs[2] = EGL_CONTEXT_OPENGL_NO_ERROR_KHR;
-        contextAttribs[3] = EGL_TRUE;
-    }
-#endif
 
     EGLConfig eglConfig = nullptr;
 

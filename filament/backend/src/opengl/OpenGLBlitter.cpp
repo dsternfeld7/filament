@@ -51,6 +51,8 @@ precision mediump float;
 uniform samplerExternalOES sampler;
 out vec4 fragColor;
 void main() {
+    //vec2 test = gl_FragCoord.xy / vec2(4032,3024);
+    //fragColor = vec4(test,0,1) + texelFetch(sampler, ivec2(gl_FragCoord.xy), 0);
     fragColor = texelFetch(sampler, ivec2(gl_FragCoord.xy), 0);
 }
 )SHADER";
@@ -124,8 +126,12 @@ void OpenGLBlitter::blit(GLuint srcTextureExternal, GLuint dstTexture2d, GLuint 
     // we're using tmu 0 as the source texture
     GLuint tmu = 0;
 
+    CHECK_GL_ERROR(utils::slog.e)
+
     // source texture
     glBindSampler(tmu, mSampler);
+    CHECK_GL_ERROR(utils::slog.e)
+
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, srcTextureExternal);
     CHECK_GL_ERROR(utils::slog.e)
 

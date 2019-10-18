@@ -41,12 +41,26 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
 
-
 /**
- * Toy class that handles all interaction with the Android camera2 API.
- * Sets the "textureTransform" and "videoTexture" parameters on the given Filament material.
+ * Demonstrates Filament's various texture sharing mechanisms.
  */
-class CameraHelper(val activity: Activity, private val filamentEngine: Engine, private val filamentMaterial: MaterialInstance, private val display: Display) {
+class CameraHelper(val activity: Activity, private val filamentEngine: Engine, private val filamentMaterial: MaterialInstance, private val display: Display, private val externalTextureId: Int) {
+    /**
+     * The StreamSource configures the source data for the texture.
+     *
+     * The "CAMERA" source shows a live feed while the "CANVAS" sources show animated test stripes.
+     * The left stripe uses texture-based animation (via Android's 2D drawing API), the right stripe
+     * uses shader-based animation. Ideally these are perfectly in sync with each other.
+     */
+    enum class StreamSource {
+        CAMERA_STREAM_SURFACE,
+        CANVAS_STREAM_SURFACE,
+        CANVAS_STREAM_TEXID,
+        CANVAS_DIRECT_IMAGE,
+    }
+
+    private val streamSource = StreamSource.CANVAS_STREAM_TEXID // CANVAS_DIRECT_IMAGE
+
     private lateinit var cameraId: String
     private lateinit var captureRequest: CaptureRequest
     private val cameraOpenCloseLock = Semaphore(1)
@@ -56,15 +70,12 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
     private var captureSession: CameraCaptureSession? = null
     private var resolution = Size(640, 480)
     private var surfaceTexture: SurfaceTexture? = null
-    private val streamSource = StreamSource.CPU_TEST_STREAM_SURFACE
-//    private val streamSource = StreamSource.CPU_TEST_EXTERNAL_IMAGE
-    //private val streamSource = StreamSource.CPU_TEST_STREAM_TEXID
     private var imageReader: ImageReader? = null
     private var frameNumber = 0L
+    private var canvasSurface: Surface? = null
+    private var filamentTexture: Texture? = null
     var uvOffset = 0.0f
         private set
-
-    private var canvasSurface: Surface? = null
 
     private val kGradientSpeed = 20
     private val kGradientCount = 5
@@ -80,13 +91,6 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
             0.5f, 0.6f,
             0.6f, 0.9f,
             0.9f, 1.0f)
-
-    enum class StreamSource {
-        CAMERA_FEED_STREAM_SURFACE,
-        CPU_TEST_STREAM_SURFACE,
-        CPU_TEST_STREAM_TEXID,
-        CPU_TEST_EXTERNAL_IMAGE,
-    }
 
     private val cameraCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(cameraDevice: CameraDevice) {
@@ -159,6 +163,19 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
             canvas.drawRect(Rect(0, 0, resolution.width, resolution.height / 2), staticPaint)
 
             surface.unlockCanvasAndPost(canvas)
+
+            if (streamSource == StreamSource.CANVAS_STREAM_TEXID) {
+                surfaceTexture!!.updateTexImage()
+            }
+
+            if (streamSource == StreamSource.CANVAS_DIRECT_IMAGE) {
+                val image = imageReader!!.acquireLatestImage()
+                val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
+                // eglImageOES = NativeHelper.hwBufferToEglImage(hwbuffer)
+                // filamentTexture.setExternalImage(filamentEngine, eglImageOES)
+                // filamentTexture.setHardwareBuffer(filamentEngine, eglImageOES)
+                // image.close()
+            }
         }
 
         frameNumber++
@@ -193,11 +210,15 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
 
     private fun createCaptureSession() {
 
-        // Create the Filament Texture and Sampler objects.
-        val filamentTexture = Texture.Builder()
+        filamentTexture?.let { filamentEngine.destroyTexture(it) }
+
+        // [Re]create the Filament Texture and Sampler objects.
+        filamentTexture = Texture.Builder()
                 .sampler(Texture.Sampler.SAMPLER_EXTERNAL)
                 .format(Texture.InternalFormat.RGB8)
                 .build(filamentEngine)
+
+        val filamentTexture = this.filamentTexture!!
 
         val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.REPEAT)
 
@@ -230,18 +251,20 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
         filamentMaterial.setParameter("textureTransform", MaterialInstance.FloatElement.MAT4, textureTransform, 0, 1)
 
         // Start the capture session.
-        if (streamSource == StreamSource.CAMERA_FEED_STREAM_SURFACE) {
+        if (streamSource == StreamSource.CAMERA_STREAM_SURFACE) {
 
             // [Re]create the Android surface that will hold the camera image.
             surfaceTexture?.release()
             surfaceTexture = SurfaceTexture(0)
-            surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
-            surfaceTexture!!.detachFromGLContext()
+            val surfaceTexture = this.surfaceTexture!!
+
+            surfaceTexture.setDefaultBufferSize(resolution.width, resolution.height)
+            surfaceTexture.detachFromGLContext()
             val surface = Surface(surfaceTexture)
 
             // Create the Filament Stream object that gets bound to the Texture.
             val filamentStream = Stream.Builder()
-                    .stream(surfaceTexture!!)
+                    .stream(surfaceTexture)
                     .build(filamentEngine)
 
             filamentTexture.setExternalStream(filamentEngine, filamentStream)
@@ -266,7 +289,7 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
                     }, null)
         }
 
-        if (streamSource == StreamSource.CPU_TEST_STREAM_SURFACE) {
+        if (streamSource == StreamSource.CANVAS_STREAM_SURFACE) {
 
             // [Re]create the Android surface that will hold the canvas image.
             surfaceTexture?.release()
@@ -281,46 +304,46 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
                     .build(filamentEngine)
 
             filamentTexture.setExternalStream(filamentEngine, filamentStream)
-
-            frameNumber = 0
-            repaintCanvas()
         }
 
-        if (streamSource == StreamSource.CPU_TEST_STREAM_TEXID) {
-
-            // TODO: This does not work, we need an active GL context.
-            val kTextureId = 42
+        if (streamSource == StreamSource.CANVAS_STREAM_TEXID) {
 
             // [Re]create the Android surface that will hold the canvas image.
             surfaceTexture?.release()
-            surfaceTexture = SurfaceTexture(kTextureId)
+            surfaceTexture = SurfaceTexture(externalTextureId)
             surfaceTexture!!.setDefaultBufferSize(resolution.width, resolution.height)
-            surfaceTexture!!.detachFromGLContext()
             canvasSurface = Surface(surfaceTexture)
 
             // Create the Filament Stream object that gets bound to the Texture.
             val filamentStream = Stream.Builder()
-                    .stream(kTextureId.toLong())
+                    .stream(externalTextureId.toLong())
                     .width(resolution.width)
                     .height(resolution.height)
                     .build(filamentEngine)
 
             filamentTexture.setExternalStream(filamentEngine, filamentStream)
-
-            frameNumber = 0
-            repaintCanvas()
         }
 
-        if (streamSource == StreamSource.CPU_TEST_EXTERNAL_IMAGE) {
+        if (streamSource == StreamSource.CANVAS_DIRECT_IMAGE) {
             val imageReader = ImageReader.newInstance(resolution.width, resolution.height, kImageReaderMaxImages, ImageFormat.PRIVATE) // , HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE)
             this.imageReader = imageReader
+            canvasSurface = imageReader.surface!!
 
             // The eglImageOES is passed down as a void* all the way to OpenGLDriver::setExternalImage where it is cast to GLeglImageOES as per GL_OES_EGL_image.
-            // val surface = imageReader.surface
             // val image = imageReader.acquireLatestImage()
             // val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
-            // TODO: On every frame (i.e. in repaintCanvas), do: imageReader.acquireLatestImage => HardwareBuffer => GLeglImageOES
             // filamentTexture.setExternalImage(filamentEngine, null) // eglImageOES)
+
+            // TODO:
+            //    On every frame (i.e. in repaintCanvas), do: imageReader.acquireLatestImage => HardwareBuffer => GLeglImageOES
+            //    Next, provide a copy-free but synchronized API that would take HardwareBuffer, and have a release callback
+            //    Note that updateTexImage would not be required or any Stream API
+            //    This might replace (or deprecate) Texture::setExternalImage
+        }
+
+        if (streamSource != StreamSource.CAMERA_STREAM_SURFACE) {
+            frameNumber = 0
+            repaintCanvas()
         }
     }
 

@@ -5,6 +5,9 @@ import android.opengl.EGLConfig;
 import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
 import android.opengl.EGLSurface;
+import android.opengl.GLES11Ext;
+import android.opengl.GLES30;
+import android.opengl.GLU;
 
 import static android.opengl.EGL15.EGL_OPENGL_ES3_BIT;
 
@@ -43,6 +46,31 @@ public class NativeHelper {
 
         return context;
         //return (EGLContext) nCreateEGLContext();
+    }
+
+    public static int createCameraTexture(EGLContext context) {
+        int[] textures = new int[1];
+        GLES30.glGenTextures(1, textures, 0);
+        int result = textures[0];
+
+        final int textureTarget = GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
+        GLES30.glBindTexture(textureTarget, result);
+        GLES30.glTexParameteri(textureTarget, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(textureTarget, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(textureTarget, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST);
+        GLES30.glTexParameteri(textureTarget, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST);
+
+        if (!GLES30.glIsTexture(result)) {
+            throw new RuntimeException("OpenGL error: $result is an invalid texture.");
+        }
+
+        int error = GLES30.glGetError();
+        if (error != GLES30.GL_NO_ERROR) {
+            String errorString = GLU.gluErrorString(error);
+            throw new RuntimeException("OpenGL error: " + errorString + "!");
+        }
+
+        return result;
     }
 
     private static native Object nCreateEGLContext();
