@@ -886,12 +886,17 @@ public class Texture {
      *                  <p>On iOS the following pixel formats are supported: <ul>
      *                          <li><code>kCVPixelFormatType_32BGRA</code></li>
      *                          <li><code>kCVPixelFormatType_420YpCbCr8BiPlanarFullRange</code></li>
-     *                   </ul></p>
+     *                  </ul></p>
+     * @param handler   an {@link java.util.concurrent.Executor Executor}. On Android this
+     *                  can also be a {@link android.os.Handler Handler}.
+     * @param callback  a callback executed by <code>handler</code> when Filament is ready
+     *                  to release the image.
      *
      * @see Builder#sampler
      */
-    public void setExternalImage(@NonNull Engine engine, long eglImage) {
-        nSetExternalImage(getNativeObject(), engine.getNativeObject(), eglImage);
+    public void setExternalImage(@NonNull Engine engine, long eglImage,
+            @Nullable Object handler, @Nullable Runnable callback) {
+        nSetExternalImage(getNativeObject(), engine.getNativeObject(), eglImage, handler, callback);
     }
 
     /**
@@ -1074,7 +1079,8 @@ public class Texture {
             int[] faceOffsetsInBytes, Object handler, Runnable callback);
 
     private static native void nSetExternalImage(
-            long nativeObject, long nativeEngine, long eglImage);
+            long nativeObject, long nativeEngine, long eglImage,
+            Object handler, Runnable callback);
 
     private static native void nSetExternalStream(long nativeTexture,
             long nativeEngine, long nativeStream);

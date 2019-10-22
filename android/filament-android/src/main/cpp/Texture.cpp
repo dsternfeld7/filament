@@ -296,11 +296,15 @@ Java_com_google_android_filament_Texture_nSetImageCubemapCompressed(JNIEnv *env,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_google_android_filament_Texture_nSetExternalImage(JNIEnv*, jclass, jlong nativeTexture,
-        jlong nativeEngine, jlong eglImage) {
+Java_com_google_android_filament_Texture_nSetExternalImage(JNIEnv* env, jclass, jlong nativeTexture,
+        jlong nativeEngine, jlong eglImage, jobject handler, jobject runnable) {
     Texture *texture = (Texture *) nativeTexture;
     Engine *engine = (Engine *) nativeEngine;
-    texture->setExternalImage(*engine, (void*)eglImage);
+
+    //auto* callback = JniBufferCallback::make(engine, env, handler, runnable, std::move(nioBuffer));
+    //texture->setExternalImage(*engine, (void*)eglImage, &JniBufferCallback::invoke, callback);
+
+    texture->setExternalImage(*engine, (void*)eglImage, nullptr, nullptr);
 }
 
 extern "C" JNIEXPORT void JNICALL

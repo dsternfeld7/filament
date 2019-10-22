@@ -158,7 +158,8 @@ void FTexture::setImage(FEngine& engine, size_t level,
     }
 }
 
-void FTexture::setExternalImage(FEngine& engine, void* image) noexcept {
+void FTexture::setExternalImage(FEngine& engine, void* image, ExternalImageCallback callback,
+            void* user) noexcept {
     if (mTarget == Sampler::SAMPLER_EXTERNAL) {
         // The call to setupExternalImage is synchronous, and allows the driver to take ownership of
         // the external image on this thread, if necessary.
@@ -498,8 +499,9 @@ void Texture::setImage(Engine& engine, size_t level,
     upcast(this)->setImage(upcast(engine), level, std::move(buffer), faceOffsets);
 }
 
-void Texture::setExternalImage(Engine& engine, void* image) noexcept {
-    upcast(this)->setExternalImage(upcast(engine), image);
+void Texture::setExternalImage(Engine& engine, void* image, ExternalImageCallback callback,
+            void* user) noexcept {
+    upcast(this)->setExternalImage(upcast(engine), image, callback, user);
 }
 
 void Texture::setExternalStream(Engine& engine, Stream* stream) noexcept {

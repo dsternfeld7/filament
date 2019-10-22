@@ -59,7 +59,7 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
         CANVAS_DIRECT_IMAGE,
     }
 
-    private val streamSource = StreamSource.CANVAS_STREAM_TEXID // CANVAS_DIRECT_IMAGE
+    private val streamSource = StreamSource.CANVAS_DIRECT_IMAGE
 
     private lateinit var cameraId: String
     private lateinit var captureRequest: CaptureRequest
@@ -171,10 +171,11 @@ class CameraHelper(val activity: Activity, private val filamentEngine: Engine, p
             if (streamSource == StreamSource.CANVAS_DIRECT_IMAGE) {
                 val image = imageReader!!.acquireLatestImage()
                 val hwbuffer: HardwareBuffer = image.hardwareBuffer!!
-                // eglImageOES = NativeHelper.hwBufferToEglImage(hwbuffer)
-                // filamentTexture.setExternalImage(filamentEngine, eglImageOES)
-                // filamentTexture.setHardwareBuffer(filamentEngine, eglImageOES)
-                // image.close()
+                val texture = filamentTexture!!
+                val eglImageOES = 10L // NativeHelper.hwBufferToEglImage(hwbuffer)
+                texture.setExternalImage(filamentEngine, eglImageOES, callback)
+                //texture.setHardwareBuffer(filamentEngine, eglImageOES)
+                image.close()
             }
         }
 

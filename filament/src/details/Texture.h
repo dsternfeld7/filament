@@ -64,7 +64,8 @@ public:
             PixelBufferDescriptor&& buffer, const FaceOffsets& faceOffsets,
             PrefilterOptions const* options);
 
-    void setExternalImage(FEngine& engine, void* image) noexcept;
+    void setExternalImage(FEngine& engine, void* image, ExternalImageCallback callback,
+            void* user) noexcept;
     void setExternalStream(FEngine& engine, FStream* stream) noexcept;
 
     void generateMipmaps(FEngine& engine) const noexcept;

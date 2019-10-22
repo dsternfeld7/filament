@@ -79,6 +79,7 @@ public:
     using CompressedType = backend::CompressedPixelDataType;         //!< Compressed pixel data format
     using FaceOffsets = backend::FaceOffsets;                        //!< Cube map faces offsets
     using Usage = backend::TextureUsage;                             //!< Usage affects texel layout
+    using ExternalImageCallback = void(*)(void* image, void* user);  //!< Releases an external image
 
     static bool isTextureFormatSupported(Engine& engine, InternalFormat format) noexcept;
 
@@ -328,6 +329,8 @@ public:
      *                      On iOS the following pixel formats are supported:
      *                        - kCVPixelFormatType_32BGRA
      *                        - kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+     * @param callback      A callback invoked when Filament no longer needs the image
+     * @param user          An opaque user pointer passed to the callback function when it's called
      *
      * @attention \p engine must be the instance passed to Builder::build()
      * @attention This Texture instance must use Sampler::SAMPLER_EXTERNAL or it has no effect
@@ -335,7 +338,8 @@ public:
      * @see Builder::sampler()
      *
      */
-    void setExternalImage(Engine& engine, void* image) noexcept;
+    void setExternalImage(Engine& engine, void* image, ExternalImageCallback callback = nullptr,
+            void* user = nullptr) noexcept;
 
 
     /**
