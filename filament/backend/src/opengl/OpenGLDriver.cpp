@@ -1711,6 +1711,16 @@ void OpenGLDriver::setExternalImage(Handle<HwTexture> th, void* image) {
         assert(t->target == SamplerType::SAMPLER_EXTERNAL);
         assert(t->gl.target == GL_TEXTURE_EXTERNAL_OES);
 
+        // If we're replacing an existing external image, then we know we can release the existing
+        // image as soon as the GPU finishes its work up till this point.
+        if (t->gl.externalImage && t->gl.externalImage != image) {
+            GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            glFlush();
+            scheduleRelease(fence, t->gl.externalImage, callback, userdata);
+        }
+
+        t->gl.externalImage = image;
+
         bindTexture(OpenGLContext::MAX_TEXTURE_UNIT_COUNT - 1, t);
         CHECK_GL_ERROR(utils::slog.e)
 
@@ -2451,6 +2461,11 @@ void OpenGLDriver::beginFrame(int64_t monotonic_clock_ns, uint32_t frameId) {
                 // NOTE: We assume that updateTexImage() binds the texture on our behalf
                 gl.updateTexImage(GL_TEXTURE_EXTERNAL_OES, t->gl.id);
             }
+        }
+    }
+    if (hasSynchronizedImage) {
+        if (glClientWaitSync(theFence, GL_SYNC_FLUSH_COMMANDS_BIT, 0) != GL_TIMEOUT_EXPIRED) {
+            scheduleRelease(theSynchronizedImage);
         }
     }
 }

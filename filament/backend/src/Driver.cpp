@@ -53,6 +53,11 @@ void DriverBase::scheduleDestroySlow(BufferDescriptor&& buffer) noexcept {
     mBufferToPurge.push_back(std::move(buffer));
 }
 
+void DriverBase::scheduleReleaseImageSlow(SyncImageDescriptor&& image) noexcept {
+    std::lock_guard<std::mutex> lock(mPurgeLock);
+    mImagesToRelease.push_back(std::move(image));
+}
+
 // ------------------------------------------------------------------------------------------------
 
 Driver::~Driver() noexcept = default;

@@ -203,7 +203,7 @@ void OpenGLProgram::updateSamplers(OpenGLDriver* gl) noexcept {
             }
 
             const GLTexture* const UTILS_RESTRICT t = gl->handle_cast<const GLTexture*>(th);
-            if (UTILS_UNLIKELY(t->gl.fence)) {
+            if (UTILS_UNLIKELY(t->gl.fence)) { // TODO: rename this fence to avoid confusion
                 glWaitSync(t->gl.fence, 0, GL_TIMEOUT_IGNORED);
                 glDeleteSync(t->gl.fence);
                 t->gl.fence = nullptr;
