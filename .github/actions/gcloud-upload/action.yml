@@ -1,5 +1,5 @@
 name: 'Upload Artifacts to Google Cloud'
 description: 'Filament GitHub Action to upload build artifacts to GCS'
 runs:
-  using: bash
-  entrypoint: entrypoint.sh
+  using: 'docker'
+  image: 'Dockerfile'
