@@ -1,3 +1,4 @@
 name: 'Upload Artifacts to Google Cloud'
 description: 'Filament GitHub Action to upload build artifacts to GCS'
-entrypoint: entrypoint.sh
+runs:
+  entrypoint: entrypoint.sh
