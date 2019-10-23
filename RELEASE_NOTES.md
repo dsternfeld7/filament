@@ -3,6 +3,8 @@
 This file contains one line summaries of commits that are worthy of mentioning in release notes.
 A new header is inserted each time a *tag* is created.
 
+- Introduce SynchronizedImage for copy-free synchronized external images on Android.
+
 ## v1.4.1
 
 - Added missing API documentation.
